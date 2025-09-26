@@ -1,16 +1,51 @@
 'use client';
 
 import { useState } from 'react';
+import { addToWaitlist, checkEmailExists } from '@/lib/supabase';
 
 export default function Hero() {
   const [email, setEmail] = useState('');
   const [isSubscribed, setIsSubscribed] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Tutaj w przyszłości będzie logika zapisywania emaila
-    setIsSubscribed(true);
-    console.log('Email zapisany:', email);
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      // Sprawdź czy email już istnieje
+      const { exists, error: checkError } = await checkEmailExists(email);
+      
+      if (checkError) {
+        setError('Błąd sprawdzania emaila. Spróbuj ponownie.');
+        setIsLoading(false);
+        return;
+      }
+
+      if (exists) {
+        setError('Ten email jest już zapisany na liście!');
+        setIsLoading(false);
+        return;
+      }
+
+      // Dodaj email do listy oczekujących
+      const result = await addToWaitlist(email);
+      
+      if (result.success) {
+        setIsSubscribed(true);
+        setEmail('');
+        console.log('Email zapisany:', email);
+      } else {
+        setError(result.error || 'Wystąpił błąd. Spróbuj ponownie.');
+      }
+    } catch (err) {
+      console.error('Submission error:', err);
+      setError('Wystąpił nieoczekiwany błąd. Spróbuj ponownie.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -50,21 +85,47 @@ export default function Hero() {
                 <input
                   type="email"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    if (error) setError(null); // Wyczyść błąd przy zmianie tekstu
+                  }}
                   placeholder="Wpisz swój email"
                   required
-                  className="flex-1 px-6 py-4 rounded-full border-2 border-gray-200 focus:border-blue-500 focus:outline-none text-lg text-gray-900 bg-white placeholder-gray-500"
+                  disabled={isLoading}
+                  className={`flex-1 px-6 py-4 rounded-full border-2 focus:outline-none text-lg text-gray-900 bg-white placeholder-gray-500 transition-colors ${
+                    error 
+                      ? 'border-red-300 focus:border-red-500' 
+                      : 'border-gray-200 focus:border-blue-500'
+                  } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
                 />
                 <button 
                   type="submit"
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-full text-lg font-medium transition-all transform hover:scale-105 shadow-lg hover:shadow-xl whitespace-nowrap"
+                  disabled={isLoading}
+                  className={`px-8 py-4 rounded-full text-lg font-medium transition-all shadow-lg hover:shadow-xl whitespace-nowrap ${
+                    isLoading
+                      ? 'bg-gray-400 cursor-not-allowed'
+                      : 'bg-blue-600 hover:bg-blue-700 text-white transform hover:scale-105'
+                  }`}
                 >
-                  Dołącz do listy oczekujących
+                  {isLoading ? 'Zapisywanie...' : 'Dołącz do listy oczekujących'}
                 </button>
               </form>
-              <p className="text-sm text-gray-500 mt-3">
-                Bądź pierwszym, który otrzyma dostęp do aplikacji
-              </p>
+              
+              {/* Error Message */}
+              {error && (
+                <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-red-600 text-sm text-center">
+                    {error}
+                  </p>
+                </div>
+              )}
+              
+              {/* Info Message */}
+              {!error && (
+                <p className="text-sm text-gray-500 mt-3">
+                  Bądź pierwszym, który otrzyma dostęp do aplikacji
+                </p>
+              )}
             </div>
           ) : (
             <div className="max-w-md mx-auto mb-12 bg-green-50 border-2 border-green-200 rounded-2xl p-6">
