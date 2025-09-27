@@ -14,9 +14,36 @@ export interface WaitlistEntry {
   created_at?: string
 }
 
+// Function to send welcome email
+async function sendWelcomeEmail(email: string) {
+  try {
+    const response = await fetch('/api/send-welcome-email', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error('Error sending welcome email:', errorData);
+      return { success: false, error: errorData.error };
+    }
+
+    const data = await response.json();
+    console.log('Welcome email sent successfully:', data);
+    return { success: true, data };
+  } catch (error) {
+    console.error('Error sending welcome email:', error);
+    return { success: false, error: 'Failed to send welcome email' };
+  }
+}
+
 // Function to add email to waitlist
 export async function addToWaitlist(email: string) {
   try {
+    // Dodaj email do listy oczekujących
     const { data, error } = await supabase
       .from('waitlist')
       .insert([
@@ -30,6 +57,12 @@ export async function addToWaitlist(email: string) {
     }
 
     console.log('Successfully added to waitlist:', data)
+
+    // Wyślij email powitalny (nie blokuje procesu jeśli się nie powiedzie)
+    sendWelcomeEmail(email).catch(emailError => {
+      console.error('Welcome email failed (non-blocking):', emailError);
+    });
+
     return { success: true, data }
   } catch (err) {
     console.error('Unexpected error:', err)
