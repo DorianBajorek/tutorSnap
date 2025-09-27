@@ -1,8 +1,16 @@
-import { Resend } from 'resend';
+import nodemailer from 'nodemailer';
 import { NextRequest, NextResponse } from 'next/server';
 
-// Inicjalizacja Resend
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Konfiguracja Gmail SMTP
+const createGmailTransporter = () => {
+  return nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      user: process.env.GMAIL_USER, // Twój Gmail
+      pass: process.env.GMAIL_APP_PASSWORD, // Hasło aplikacji
+    },
+  });
+};
 
 // Szablon emaila powitalnego
 const createWelcomeEmailHTML = (email: string) => {
@@ -156,34 +164,32 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!process.env.RESEND_API_KEY) {
-      console.error('RESEND_API_KEY nie jest ustawiony');
+    if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
+      console.error('Konfiguracja Gmail nie jest ustawiona');
       return NextResponse.json(
         { error: 'Konfiguracja serwera jest nieprawidłowa' },
         { status: 500 }
       );
     }
 
-    // Wysłanie emaila
-    const { data, error } = await resend.emails.send({
-      from: 'TutorSnap <onboarding@resend.dev>', // Używamy domyślnej domeny Resend
-      to: [email],
+    // Tworzenie transporter Gmail
+    const transporter = createGmailTransporter();
+
+    // Konfiguracja emaila
+    const mailOptions = {
+      from: `TutorSnap <${process.env.GMAIL_USER}>`, // Twój Gmail jako nadawca
+      to: email,
       subject: '🎉 Witaj w TutorSnap - Jesteś na liście oczekujących!',
       html: createWelcomeEmailHTML(email),
       text: `Witaj w TutorSnap!\n\nDziękujemy za zapisanie się na listę oczekujących.\n\nSpecjalny bonus: Otrzymasz darmowy dostęp do pełnej wersji aplikacji przez pierwsze 3 miesiące!\n\nAplikacja będzie gotowa w ciągu najbliższych 2-3 miesięcy.\n\nTwój email: ${email}\n\n© 2024 TutorSnap`,
-    });
+    };
 
-    if (error) {
-      console.error('Błąd Resend:', error);
-      return NextResponse.json(
-        { error: 'Nie udało się wysłać emaila' },
-        { status: 500 }
-      );
-    }
+    // Wysłanie emaila przez Gmail
+    const info = await transporter.sendMail(mailOptions);
 
-    console.log('Email wysłany pomyślnie:', data);
+    console.log('Email wysłany pomyślnie przez Gmail:', info.messageId);
     return NextResponse.json(
-      { success: true, message: 'Email wysłany pomyślnie', data },
+      { success: true, message: 'Email wysłany pomyślnie', messageId: info.messageId },
       { status: 200 }
     );
 
